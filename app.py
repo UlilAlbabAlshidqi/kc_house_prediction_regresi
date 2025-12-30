@@ -9,7 +9,7 @@ model = joblib.load('best_model_lgb.pkl')
 preprocessor = joblib.load('preprocessor.pkl')
 encoder = joblib.load('encoder.pkl')
 columns_order = joblib.load('columns_order.pkl')
-medoids = joblib.load('kmedoids_medoids.pkl')  # hanya medoids
+medoids = joblib.load('kmedoids_medoids.pkl')   # hanya medoids
 
 # Daftar fitur input dasar
 input_features = [
@@ -33,14 +33,14 @@ def create_features(data):
     data['basement_ratio'] = data['sqft_basement'] / (data['sqft_living'] + 1e-6)
     data['livinglot_ratio'] = data['sqft_living'] / (data['sqft_lot'] + 1e-6)
     data['cluster'] = [assign_cluster(row['lat'], row['long'], medoids) for _, row in data.iterrows()]
-    data = data.drop(columns=['lat', 'long'])
+    data = data.drop(columns=['lat','long'])
     return data
 
 # Transform input agar sama dengan training
 def transform_input(df_input):
     categorical_columns = ['waterfront', 'view', 'condition', 'grade', 'is_renovated', 'cluster']
     numerical_columns = [col for col in df_input.columns if col not in categorical_columns]
-
+    
     # Log transform untuk numeric tertentu
     cols_log = [
         'bedrooms', 'sqft_lot', 'sqft_above', 'sqft_basement',
@@ -49,14 +49,14 @@ def transform_input(df_input):
     ]
     for col in cols_log:
         df_input[col] = df_input[col].apply(lambda x: np.log1p(max(x, 0)))
-
+    
     # Scaling numeric
     X_num_scaled = pd.DataFrame(
         preprocessor.transform(df_input[numerical_columns]),
         columns=numerical_columns,
         index=df_input.index
     )
-
+    
     # Encoding cluster
     cluster_encoded = encoder.transform(df_input[['cluster']])
     cluster_encoded_df = pd.DataFrame(
@@ -64,15 +64,14 @@ def transform_input(df_input):
         columns=[f"cluster_{int(i)}" for i in range(cluster_encoded.shape[1])],
         index=df_input.index
     )
-
+    
     # Gabungkan categorical selain cluster
     X_cat = pd.concat([df_input[categorical_columns].drop('cluster', axis=1), cluster_encoded_df], axis=1)
-
+    
     # Final concat
     X_final = pd.concat([X_num_scaled.reset_index(drop=True), X_cat.reset_index(drop=True)], axis=1)
     X_final = X_final.reindex(columns=columns_order, fill_value=0)
     return X_final
-
 
 # ================= STREAMLIT APP =================
 st.title("🏠 House Price Prediction")
@@ -84,10 +83,10 @@ bathrooms = st.number_input("Bathrooms (0.0–8.0)", min_value=0.0, max_value=8.
 sqft_living = st.number_input("Sqft Living (290–13540)", min_value=290, max_value=13540, value=1800)
 sqft_lot = st.number_input("Sqft Lot (520–1651359)", min_value=520, max_value=1651359, value=5000)
 floors = st.number_input("Floors (1.0–3.5)", min_value=1.0, max_value=3.5, value=1.0)
-waterfront = st.selectbox("Waterfront", [0, 1])
-view = st.selectbox("View", [0, 1, 2, 3, 4])
-condition = st.selectbox("Condition", [1, 2, 3, 4, 5])
-grade = st.selectbox("Grade (1–13)", list(range(1, 14)))
+waterfront = st.selectbox("Waterfront", [0,1])
+view = st.selectbox("View", [0,1,2,3,4])
+condition = st.selectbox("Condition", [1,2,3,4,5])
+grade = st.selectbox("Grade (1–13)", list(range(1,14)))
 sqft_above = st.number_input("Sqft Above (290–9410)", min_value=290, max_value=9410, value=1500)
 sqft_basement = st.number_input("Sqft Basement (0–4820)", min_value=0, max_value=4820, value=200)
 sqft_living15 = st.number_input("Sqft Living 15 (399–6210)", min_value=399, max_value=6210, value=1800)
@@ -101,35 +100,19 @@ is_renovated = 1 if is_renovated_str == "Yes" else 0
 lat = st.number_input("Latitude (47.1559–47.7776)", min_value=47.1559, max_value=47.7776, value=47.5)
 long = st.number_input("Longitude (-122.519–-121.315)", min_value=-122.519, max_value=-121.315, value=-122.0)
 
-# Menampilkan input yang dimasukkan
-st.write("### Your Input:")
-st.write(f"Bedrooms: {bedrooms}")
-st.write(f"Bathrooms: {bathrooms}")
-st.write(f"Sqft Living: {sqft_living}")
-st.write(f"Sqft Lot: {sqft_lot}")
-st.write(f"Floors: {floors}")
-st.write(f"Waterfront: {waterfront}")
-st.write(f"View: {view}")
-st.write(f"Condition: {condition}")
-st.write(f"Grade: {grade}")
-st.write(f"Sqft Above: {sqft_above}")
-st.write(f"Sqft Basement: {sqft_basement}")
-st.write(f"Sqft Living 15: {sqft_living15}")
-st.write(f"Sqft Lot 15: {sqft_lot15}")
-st.write(f"Age Since Renovation: {age_since_renovation}")
-st.write(f"Renovated: {is_renovated_str}")
-st.write(f"Latitude: {lat}")
-st.write(f"Longitude: {long}")
-
 if st.button("Predict Price"):
     data_input = pd.DataFrame([[bedrooms, bathrooms, sqft_living, sqft_lot, floors,
                                 waterfront, view, condition, grade, sqft_above,
                                 sqft_basement, sqft_living15, sqft_lot15,
                                 age_since_renovation, is_renovated,
                                 lat, long]],
-                              columns=input_features + ['lat', 'long'])
-
+                              columns=input_features + ['lat','long'])
+    
+    # Tampilkan input pengguna dalam bentuk tabel
+    st.write("### Input yang Anda Masukkan:")
+    st.dataframe(data_input)
+    
     data_input = create_features(data_input)
     X_ready = transform_input(data_input)
     price_pred = model.predict(X_ready)[0]
-    st.success(f"💰 Predicted House Price: ${price_pred:,.2f}")
+    st.success(f"💰 Predicted House Price: ${price_pred:,.2f}") 
